@@ -39,6 +39,10 @@ jobs:
           BASE_PATH: /${{ github.event.repository.name }}/
 
       - uses: actions/configure-pages@v5
+        # Legt die Pages-Site beim ersten Lauf selbst an (Source: GitHub Actions),
+        # damit das Repo dafuer nicht manuell konfiguriert werden muss.
+        with:
+          enablement: true
 
       - uses: actions/upload-pages-artifact@v3
         with:
