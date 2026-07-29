@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Card Maker — Design Document</title>
+  <style>
+    :root {
+      --fg: #1a1a1a;
+      --muted: #6b6b6b;
+      --border: #e4e4e4;
+      --bg: #ffffff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0 auto;
+      max-width: 46rem;
+      padding: 3rem 1.5rem;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      color: var(--fg);
+      background: var(--bg);
+      line-height: 1.6;
+    }
+    h1 { font-size: 1.8rem; letter-spacing: -0.02em; margin-bottom: 0.25rem; }
+    h2 { font-size: 1.15rem; margin-top: 2.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.35rem; }
+    h3 { font-size: 1rem; margin-top: 1.5rem; }
+    p.lead { color: var(--muted); margin-top: 0; }
+    table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+    th, td { border: 1px solid var(--border); padding: 0.4rem 0.6rem; text-align: left; }
+    th { background: #fafafa; font-weight: 600; }
+    code { background: #f4f4f4; border-radius: 4px; padding: 0.1em 0.35em; font-size: 0.85em; }
+    pre { background: #f4f4f4; border-radius: 6px; padding: 0.75rem 1rem; overflow-x: auto; font-size: 0.85rem; }
+    ul { padding-left: 1.25rem; }
+    li { margin: 0.25rem 0; }
+  </style>
+</head>
+<body>
+  <h1>Card Maker</h1>
+  <p class="lead">Design document — single-page tool for creating custom playing card sets.</p>
+
+  <h2>Overview</h2>
+  <p>
+    Card Maker is a single, quietly styled page. There is no navigation, no routing and no
+    sub-pages: content builds strictly from top to bottom as the user works through four steps.
+    Everything runs in the browser; nothing is persisted.
+  </p>
+
+  <h2>Principles</h2>
+  <ul>
+    <li><strong>One page, one flow.</strong> Four numbered steps, read and completed top to bottom.</li>
+    <li><strong>Subtle visual design.</strong> Neutral palette, generous whitespace, no decoration that competes with the cards themselves.</li>
+    <li><strong>Minimal implementation.</strong> Few components, few dependencies, no state beyond what the page needs.</li>
+  </ul>
+
+  <h2>Step 1 — Card format</h2>
+  <p>
+    The user picks a physical card format by clicking a schematic card. The formats are shown
+    side by side as blank cards whose on-screen size is proportional to the real dimensions,
+    so the differences are visible at a glance.
+  </p>
+  <table>
+    <tr><th>Format</th><th>Size</th><th>Note</th></tr>
+    <tr><td>Bridge</td><td>57 × 89 mm</td><td>Narrow standard size</td></tr>
+    <tr><td>Skat</td><td>59 × 91 mm</td><td>German tournament size</td></tr>
+    <tr><td>TCG</td><td>63 × 88 mm</td><td>Magic: The Gathering, Pokémon and most trading card games</td></tr>
+    <tr><td>Poker</td><td>63.5 × 88.9 mm</td><td>International standard size</td></tr>
+    <tr><td>Tarot</td><td>70 × 120 mm</td><td>Large format</td></tr>
+  </table>
+
+  <h2>Step 2 — Layout</h2>
+  <p>
+    The layout defines which fields a card carries and how they are arranged. Layouts are
+    presented as small schematic cards (rendered in the selected format's aspect ratio) with
+    the field placeholders visible.
+  </p>
+  <table>
+    <tr><th>Layout</th><th>Fields</th></tr>
+    <tr><td>Playing card</td><td>Corner indices (top-left, bottom-right mirrored), large central artwork</td></tr>
+    <tr><td>Trading card</td><td>Name, artwork, type line, rules text — in the style of Magic: The Gathering</td></tr>
+    <tr><td>Monster</td><td>Name, hit points, artwork, two attacks — in the style of Pokémon</td></tr>
+    <tr><td>Quartet</td><td>Title, artwork, four label/value stat rows — in the style of car quartets</td></tr>
+    <tr><td>Tarot</td><td>Numeral, dominant artwork, centered name plate</td></tr>
+    <tr><td>Portrait</td><td>Large portrait, name, short description</td></tr>
+  </table>
+
+  <h2>Step 3 — Frame design</h2>
+  <p>
+    A free-text prompt describes the desired visual style. From it the app builds a
+    <em>reference prompt</em> and sends it to the OpenAI image API
+    (<code>gpt-image-1</code>) to generate a decorative <strong>frame design</strong> — the
+    shared visual identity of the whole card set.
+  </p>
+  <p>The reference prompt combines:</p>
+  <ul>
+    <li>the selected format (name and physical dimensions, portrait, full bleed),</li>
+    <li>the selected layout's reserved regions, which must stay visually quiet so content placed on top remains readable,</li>
+    <li>hard constraints: no text, no letters, no logos, no sample content, no characters,</li>
+    <li>the user's style prompt.</li>
+  </ul>
+  <p>
+    A checkbox additionally requests a <strong>card back</strong>: a single symmetric
+    ornamental composition covering the whole card, generated from the same style prompt.
+    Front (and back, if requested) are rendered as previews directly below the prompt.
+  </p>
+  <p>
+    The API token is provided via the environment variable
+    <code>VITE_OPENAI_API_KEY</code> (e.g. in an untracked <code>.env.local</code>) and is
+    resolved at build time. Without a token the generate button is disabled and a short hint
+    is shown.
+  </p>
+
+  <h2>Step 4 — Cards</h2>
+  <p>
+    Below the frame design, the user defines the actual cards of the set.
+  </p>
+  <ul>
+    <li><strong>Image upload:</strong> one or more images at once; each image creates a new card in the selected format and layout, with the generated frame design as background and the image placed in the layout's artwork region.</li>
+    <li><strong>Empty card:</strong> a card can also be created without an image; its artwork region stays empty and can be filled later by clicking it.</li>
+    <li><strong>In-place editing:</strong> every field defined by the layout is edited directly on the card preview — there are no separate forms.</li>
+    <li>Cards can be removed individually.</li>
+  </ul>
+
+  <h2>Technical notes</h2>
+  <ul>
+    <li>React + TypeScript + Vite, Tailwind CSS, shadcn/ui; deployed as a static site.</li>
+    <li>Card rendering is a single <code>CardFace</code> component: real aspect ratio via CSS <code>aspect-ratio</code>, all inner sizes in <code>em</code> relative to the card width, so one implementation serves schematic previews and full-size editable cards.</li>
+    <li>Uploaded images are held in memory as data URLs; there is no backend and no storage.</li>
+  </ul>
+
+  <h2>Non-goals</h2>
+  <ul>
+    <li>No accounts, saving or sharing.</li>
+    <li>No print/export pipeline (possible later extension).</li>
+    <li>No free-form layout editing — layouts are fixed templates.</li>
+  </ul>
+</body>
+</html>
