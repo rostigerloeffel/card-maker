@@ -44,7 +44,9 @@ Bereits enthalten: `button`, `card`, `input`, `label`, `separator`, `textarea`.
 `.github/workflows/deploy.yml` baut bei jedem Push auf `main` und veröffentlicht
 `dist/` über GitHub Pages. Damit das greift, muss in den Repo-Settings unter
 **Settings → Pages → Build and deployment → Source** einmalig **GitHub Actions**
-ausgewählt werden.
+ausgewählt werden — nicht „Deploy from a branch“, sonst würde das Repo-Root
+statt des Builds ausgeliefert. Automatisieren lässt sich dieser Schritt nicht:
+das `GITHUB_TOKEN` darf die Pages-Site nicht selbst anlegen.
 
 Der Base-Pfad wird über die Env-Variable `BASE_PATH` gesetzt (im Workflow auf
 `/<repo-name>/`), lokal bleibt er `/`.
