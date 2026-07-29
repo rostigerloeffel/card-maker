@@ -30,6 +30,19 @@ interface FieldProps {
   onChange?: (key: string, value: string) => void
 }
 
+const FONT_WEIGHTS = { normal: 400, medium: 500, semibold: 600 } as const
+
+// Typografie einer Textregion als Inline-Styles — dieselben Werte nutzt der
+// PDF-Export für das Canvas-Rendering.
+function typography(region: TextRegion): CSSProperties {
+  return {
+    fontSize: `${region.size ?? 1}em`,
+    textAlign: region.align ?? 'left',
+    fontWeight: FONT_WEIGHTS[region.weight ?? 'normal'],
+    letterSpacing: region.tracking ? `${region.tracking}em` : undefined,
+  }
+}
+
 function Field({ region, values, themed, onChange }: FieldProps) {
   const value = values[region.key] ?? ''
 
@@ -39,8 +52,8 @@ function Field({ region, values, themed, onChange }: FieldProps) {
         className={cn(
           'block truncate',
           themed ? 'text-(--card-ink-soft)' : 'text-muted-foreground/70',
-          region.className,
         )}
+        style={typography(region)}
       >
         {value || region.placeholder}
       </span>
@@ -52,13 +65,13 @@ function Field({ region, values, themed, onChange }: FieldProps) {
     themed
       ? 'bg-(--card-panel) text-(--card-ink) placeholder:text-(--card-ink-soft) focus:bg-(--card-panel-focus)'
       : 'bg-background/65 placeholder:text-muted-foreground/60 focus:bg-background/90',
-    region.className,
   )
 
   if (region.multiline) {
     return (
       <textarea
         className={cn(shared, 'h-full resize-none py-[0.25em] leading-snug')}
+        style={typography(region)}
         value={value}
         placeholder={region.placeholder}
         onChange={(e) => onChange(region.key, e.target.value)}
@@ -68,6 +81,7 @@ function Field({ region, values, themed, onChange }: FieldProps) {
   return (
     <input
       className={cn(shared, 'h-full')}
+      style={typography(region)}
       value={value}
       placeholder={region.placeholder}
       onChange={(e) => onChange(region.key, e.target.value)}

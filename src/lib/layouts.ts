@@ -22,8 +22,12 @@ export interface TextRegion extends LayoutRegionBase {
   kind: 'text'
   placeholder: string
   multiline?: boolean
-  // Typografie des Feldes als Tailwind-Klassen (Größe, Ausrichtung, Gewicht).
-  className?: string
+  // Typografie als Daten, damit Karteneditor und PDF-Export identisch
+  // rendern: Größe in em relativ zur Kartengrundschrift, Laufweite in em.
+  size?: number
+  align?: 'left' | 'center' | 'right'
+  weight?: 'normal' | 'medium' | 'semibold'
+  tracking?: number
   // 180° gedreht (unteres Eckzeichen einer Spielkarte).
   rotate?: boolean
 }
@@ -52,7 +56,8 @@ export const LAYOUTS: CardLayout[] = [
         w: 16,
         h: 7,
         placeholder: 'A♠',
-        className: 'text-center font-semibold',
+        align: 'center',
+        weight: 'semibold',
       },
       { kind: 'art', key: 'art', label: 'large central artwork window', x: 10, y: 14, w: 80, h: 72 },
       {
@@ -64,7 +69,8 @@ export const LAYOUTS: CardLayout[] = [
         w: 16,
         h: 7,
         placeholder: 'A♠',
-        className: 'text-center font-semibold',
+        align: 'center',
+        weight: 'semibold',
         rotate: true,
       },
     ],
@@ -83,7 +89,7 @@ export const LAYOUTS: CardLayout[] = [
         w: 88,
         h: 7,
         placeholder: 'Name',
-        className: 'font-semibold',
+        weight: 'semibold',
       },
       { kind: 'art', key: 'art', label: 'main artwork window', x: 6, y: 14.5, w: 88, h: 42 },
       {
@@ -95,7 +101,7 @@ export const LAYOUTS: CardLayout[] = [
         w: 88,
         h: 5,
         placeholder: 'Typ — Untertyp',
-        className: 'text-[0.72em]',
+        size: 0.72,
       },
       {
         kind: 'text',
@@ -107,7 +113,7 @@ export const LAYOUTS: CardLayout[] = [
         h: 28,
         placeholder: 'Regeltext oder Beschreibung',
         multiline: true,
-        className: 'text-[0.68em]',
+        size: 0.68,
       },
     ],
   },
@@ -125,7 +131,7 @@ export const LAYOUTS: CardLayout[] = [
         w: 60,
         h: 7,
         placeholder: 'Name',
-        className: 'font-semibold',
+        weight: 'semibold',
       },
       {
         kind: 'text',
@@ -136,7 +142,9 @@ export const LAYOUTS: CardLayout[] = [
         w: 26,
         h: 7,
         placeholder: '60 KP',
-        className: 'text-right text-[0.72em] font-medium',
+        size: 0.72,
+        align: 'right',
+        weight: 'medium',
       },
       { kind: 'art', key: 'art', label: 'main artwork window', x: 6, y: 14.5, w: 88, h: 38 },
       {
@@ -149,7 +157,7 @@ export const LAYOUTS: CardLayout[] = [
         h: 18,
         placeholder: 'Erste Attacke',
         multiline: true,
-        className: 'text-[0.66em]',
+        size: 0.66,
       },
       {
         kind: 'text',
@@ -161,7 +169,7 @@ export const LAYOUTS: CardLayout[] = [
         h: 18,
         placeholder: 'Zweite Attacke',
         multiline: true,
-        className: 'text-[0.66em]',
+        size: 0.66,
       },
     ],
   },
@@ -179,7 +187,8 @@ export const LAYOUTS: CardLayout[] = [
         w: 88,
         h: 7,
         placeholder: 'Titel',
-        className: 'text-center font-semibold',
+        align: 'center',
+        weight: 'semibold',
       },
       { kind: 'art', key: 'art', label: 'artwork window', x: 6, y: 14.5, w: 88, h: 41 },
       ...[1, 2, 3, 4].flatMap<LayoutRegion>((i) => [
@@ -192,7 +201,7 @@ export const LAYOUTS: CardLayout[] = [
           w: 58,
           h: 7.5,
           placeholder: `Eigenschaft ${i}`,
-          className: 'text-[0.66em]',
+          size: 0.66,
         },
         {
           kind: 'text',
@@ -203,7 +212,8 @@ export const LAYOUTS: CardLayout[] = [
           w: 28,
           h: 7.5,
           placeholder: '–',
-          className: 'text-right text-[0.66em]',
+          size: 0.66,
+          align: 'right',
         },
       ]),
     ],
@@ -222,7 +232,9 @@ export const LAYOUTS: CardLayout[] = [
         w: 30,
         h: 6,
         placeholder: 'XXI',
-        className: 'text-center text-[0.72em] tracking-[0.2em]',
+        size: 0.72,
+        align: 'center',
+        tracking: 0.2,
       },
       { kind: 'art', key: 'art', label: 'dominant central artwork area', x: 7, y: 13, w: 86, h: 73 },
       {
@@ -234,7 +246,9 @@ export const LAYOUTS: CardLayout[] = [
         w: 86,
         h: 7,
         placeholder: 'Die Welt',
-        className: 'text-center font-medium tracking-wide',
+        align: 'center',
+        weight: 'medium',
+        tracking: 0.025,
       },
     ],
   },
@@ -253,7 +267,7 @@ export const LAYOUTS: CardLayout[] = [
         w: 88,
         h: 7,
         placeholder: 'Name',
-        className: 'font-semibold',
+        weight: 'semibold',
       },
       {
         kind: 'text',
@@ -265,7 +279,7 @@ export const LAYOUTS: CardLayout[] = [
         h: 23,
         placeholder: 'Kurzbeschreibung',
         multiline: true,
-        className: 'text-[0.68em]',
+        size: 0.68,
       },
     ],
   },

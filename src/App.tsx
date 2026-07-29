@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { ImagePlus, Loader2, Plus, Send, Sparkles, Trash2 } from 'lucide-react'
+import { FileDown, ImagePlus, Loader2, Plus, Send, Sparkles, Trash2 } from 'lucide-react'
 
 import { CardFace, type CardValues } from '@/components/CardFace'
 import { Button } from '@/components/ui/button'
@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { FORMATS } from '@/lib/formats'
 import { LAYOUTS } from '@/lib/layouts'
 import { generateFrame, loadApiKey, refineFrame, saveApiKey } from '@/lib/openai'
+import { exportCardsPdf } from '@/lib/pdf'
 import { deriveTheme, type CardTheme } from '@/lib/theme'
 import { cn } from '@/lib/utils'
 
@@ -54,6 +55,7 @@ function App() {
   const [history, setHistory] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
   const [cards, setCards] = useState<CardEntry[]>([])
+  const [exporting, setExporting] = useState(false)
 
   const uploadRef = useRef<HTMLInputElement>(null)
   const replaceRef = useRef<HTMLInputElement>(null)
@@ -147,6 +149,24 @@ function App() {
     if (!id || !file) return
     const image = await readAsDataUrl(file)
     setCards((prev) => prev.map((c) => (c.id === id ? { ...c, image } : c)))
+  }
+
+  async function handleExport() {
+    setExporting(true)
+    setError(null)
+    try {
+      await exportCardsPdf(
+        format,
+        layout,
+        cards,
+        frames,
+        frames.front ? theme : null,
+      )
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setExporting(false)
+    }
   }
 
   function updateCard(id: string, key: string, value: string) {
@@ -361,6 +381,14 @@ function App() {
           <Button variant="outline" onClick={() => addCard()}>
             <Plus />
             Leere Karte
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleExport}
+            disabled={exporting || cards.length === 0}
+          >
+            {exporting ? <Loader2 className="animate-spin" /> : <FileDown />}
+            Als PDF exportieren
           </Button>
           <input
             ref={uploadRef}
