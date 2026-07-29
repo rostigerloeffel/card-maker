@@ -1,95 +1,302 @@
-import { useState } from 'react'
-import { Sparkles } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { ImagePlus, Loader2, Plus, Sparkles, Trash2 } from 'lucide-react'
 
+import { CardFace, type CardValues } from '@/components/CardFace'
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Textarea } from '@/components/ui/textarea'
+import { FORMATS } from '@/lib/formats'
+import { LAYOUTS } from '@/lib/layouts'
+import { generateFrame, hasApiKey } from '@/lib/openai'
+import { cn } from '@/lib/utils'
 
-const initialCard = {
-  title: 'Neue Karte',
-  subtitle: 'Untertitel',
-  body: 'Beschreibe hier, was auf der Karte stehen soll.',
+interface CardEntry {
+  id: string
+  image?: string
+  values: CardValues
+}
+
+function Step({ n, title, hint }: { n: number; title: string; hint: string }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <h2 className="text-lg font-medium tracking-tight">
+        <span className="mr-2 text-muted-foreground/50 tabular-nums">{n}</span>
+        {title}
+      </h2>
+      <p className="text-sm text-muted-foreground">{hint}</p>
+    </div>
+  )
+}
+
+function readAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(file)
+  })
 }
 
 function App() {
-  const [card, setCard] = useState(initialCard)
+  const [formatId, setFormatId] = useState('poker')
+  const [layoutId, setLayoutId] = useState('tcg')
+  const [stylePrompt, setStylePrompt] = useState('')
+  const [withBack, setWithBack] = useState(false)
+  const [frames, setFrames] = useState<{ front?: string; back?: string }>({})
+  const [generating, setGenerating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [cards, setCards] = useState<CardEntry[]>([])
+
+  const uploadRef = useRef<HTMLInputElement>(null)
+  const replaceRef = useRef<HTMLInputElement>(null)
+  const replaceCardId = useRef<string | null>(null)
+
+  const format = FORMATS.find((f) => f.id === formatId) ?? FORMATS[0]
+  const layout = LAYOUTS.find((l) => l.id === layoutId) ?? LAYOUTS[0]
+
+  async function handleGenerate() {
+    setGenerating(true)
+    setError(null)
+    try {
+      const [front, back] = await Promise.all([
+        generateFrame(format, layout, stylePrompt, 'front'),
+        withBack ? generateFrame(format, layout, stylePrompt, 'back') : Promise.resolve(undefined),
+      ])
+      setFrames({ front, back })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  function addCard(image?: string) {
+    setCards((prev) => [...prev, { id: crypto.randomUUID(), image, values: {} }])
+  }
+
+  async function handleUpload(files: FileList | null) {
+    if (!files) return
+    for (const file of Array.from(files)) {
+      addCard(await readAsDataUrl(file))
+    }
+  }
+
+  async function handleReplace(files: FileList | null) {
+    const id = replaceCardId.current
+    const file = files?.[0]
+    if (!id || !file) return
+    const image = await readAsDataUrl(file)
+    setCards((prev) => prev.map((c) => (c.id === id ? { ...c, image } : c)))
+  }
+
+  function updateCard(id: string, key: string, value: string) {
+    setCards((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, values: { ...c.values, [key]: value } } : c)),
+    )
+  }
 
   return (
-    <main className="mx-auto flex min-h-svh max-w-5xl flex-col gap-8 px-6 py-12">
+    <main className="mx-auto flex min-h-svh max-w-5xl flex-col gap-10 px-6 py-12">
       <header className="flex flex-col gap-2">
         <h1 className="flex items-center gap-2 text-3xl font-semibold tracking-tight">
           <Sparkles className="size-7" />
           Card Maker
         </h1>
         <p className="text-muted-foreground">
-          React + TypeScript + Vite + Tailwind + shadcn/ui. Alles läuft im
-          Browser, nichts wird gespeichert.
+          Eigene Spielkarten entwerfen: Format wählen, Layout festlegen, Rahmendesign
+          generieren, Karten befüllen.
         </p>
       </header>
 
       <Separator />
 
-      <div className="grid gap-8 md:grid-cols-2">
-        <section className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="title">Titel</Label>
-            <Input
-              id="title"
-              value={card.title}
-              onChange={(e) => setCard({ ...card, title: e.target.value })}
-            />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="subtitle">Untertitel</Label>
-            <Input
-              id="subtitle"
-              value={card.subtitle}
-              onChange={(e) => setCard({ ...card, subtitle: e.target.value })}
-            />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="body">Text</Label>
-            <Textarea
-              id="body"
-              rows={5}
-              value={card.body}
-              onChange={(e) => setCard({ ...card, body: e.target.value })}
-            />
-          </div>
-          <Button
-            variant="outline"
-            className="self-start"
-            onClick={() => setCard(initialCard)}
-          >
-            Zurücksetzen
-          </Button>
-        </section>
+      <section className="flex flex-col gap-5">
+        <Step n={1} title="Format" hint="Die Vorschau entspricht den realen Proportionen." />
+        <div className="flex flex-wrap items-end gap-6">
+          {FORMATS.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => setFormatId(f.id)}
+              className="group flex flex-col items-center gap-2"
+            >
+              <div
+                className={cn(
+                  'rounded-md border-2 bg-card shadow-xs transition-colors',
+                  f.id === formatId
+                    ? 'border-primary'
+                    : 'border-border group-hover:border-ring',
+                )}
+                style={{ width: f.widthMm * 1.4, aspectRatio: `${f.widthMm} / ${f.heightMm}` }}
+              />
+              <div className="text-sm font-medium">{f.name}</div>
+              <div className="text-xs text-muted-foreground">
+                {f.widthMm} × {f.heightMm} mm
+              </div>
+            </button>
+          ))}
+        </div>
+      </section>
 
-        <section>
-          <Card>
-            <CardHeader>
-              <CardTitle>{card.title || 'Ohne Titel'}</CardTitle>
-              <CardDescription>{card.subtitle}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm whitespace-pre-wrap">{card.body}</p>
-            </CardContent>
-            <CardFooter>
-              <span className="text-muted-foreground text-xs">Vorschau</span>
-            </CardFooter>
-          </Card>
-        </section>
-      </div>
+      <section className="flex flex-col gap-5">
+        <Step n={2} title="Layout" hint="Bestimmt Felder und Aufteilung der Karte." />
+        <div className="flex flex-wrap items-start gap-6">
+          {LAYOUTS.map((l) => (
+            <button
+              key={l.id}
+              type="button"
+              onClick={() => setLayoutId(l.id)}
+              className={cn(
+                'flex w-[118px] flex-col items-center gap-2 rounded-lg p-1 transition-colors',
+                l.id === layoutId ? 'ring-2 ring-primary' : 'hover:ring-2 hover:ring-ring/40',
+              )}
+            >
+              <CardFace format={format} layout={l} width={110} />
+              <div className="text-sm font-medium">{l.name}</div>
+              <div className="text-center text-xs text-muted-foreground">{l.description}</div>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="flex flex-col gap-5">
+        <Step
+          n={3}
+          title="Rahmendesign"
+          hint="Beschreibe den gewünschten Stil — daraus entsteht ein Rahmendesign für alle Karten."
+        />
+        <div className="flex max-w-xl flex-col gap-3">
+          <Textarea
+            rows={3}
+            placeholder="z. B. dunkles Fantasy-Design mit goldenen Ornamenten und feiner Linienführung"
+            value={stylePrompt}
+            onChange={(e) => setStylePrompt(e.target.value)}
+          />
+          <Label className="flex items-center gap-2 text-sm font-normal">
+            <input
+              type="checkbox"
+              className="size-4 accent-primary"
+              checked={withBack}
+              onChange={(e) => setWithBack(e.target.checked)}
+            />
+            Auch eine Rückseite erzeugen
+          </Label>
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={handleGenerate}
+              disabled={generating || !stylePrompt.trim() || !hasApiKey}
+              className="self-start"
+            >
+              {generating && <Loader2 className="animate-spin" />}
+              Design generieren
+            </Button>
+            {!hasApiKey && (
+              <span className="text-sm text-muted-foreground">
+                Kein API-Token konfiguriert (VITE_OPENAI_API_KEY).
+              </span>
+            )}
+          </div>
+          {error && <p className="text-sm text-destructive">{error}</p>}
+        </div>
+        {(frames.front || frames.back) && (
+          <div className="flex flex-wrap gap-6">
+            {frames.front && (
+              <figure className="flex flex-col items-center gap-2">
+                <img
+                  src={frames.front}
+                  alt="Rahmendesign Vorderseite"
+                  className="rounded-md border shadow-sm"
+                  style={{ width: 220, aspectRatio: `${format.widthMm} / ${format.heightMm}`, objectFit: 'cover' }}
+                />
+                <figcaption className="text-xs text-muted-foreground">Vorderseite</figcaption>
+              </figure>
+            )}
+            {frames.back && (
+              <figure className="flex flex-col items-center gap-2">
+                <img
+                  src={frames.back}
+                  alt="Rahmendesign Rückseite"
+                  className="rounded-md border shadow-sm"
+                  style={{ width: 220, aspectRatio: `${format.widthMm} / ${format.heightMm}`, objectFit: 'cover' }}
+                />
+                <figcaption className="text-xs text-muted-foreground">Rückseite</figcaption>
+              </figure>
+            )}
+          </div>
+        )}
+      </section>
+
+      <section className="flex flex-col gap-5">
+        <Step
+          n={4}
+          title="Karten"
+          hint="Bilder hochladen oder leere Karten anlegen — alle Felder sind direkt auf der Karte editierbar."
+        />
+        <div className="flex gap-3">
+          <Button variant="outline" onClick={() => uploadRef.current?.click()}>
+            <ImagePlus />
+            Bilder hochladen
+          </Button>
+          <Button variant="outline" onClick={() => addCard()}>
+            <Plus />
+            Leere Karte
+          </Button>
+          <input
+            ref={uploadRef}
+            type="file"
+            accept="image/*"
+            multiple
+            hidden
+            onChange={(e) => {
+              void handleUpload(e.target.files)
+              e.target.value = ''
+            }}
+          />
+          <input
+            ref={replaceRef}
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={(e) => {
+              void handleReplace(e.target.files)
+              e.target.value = ''
+            }}
+          />
+        </div>
+        {cards.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Noch keine Karten angelegt.</p>
+        ) : (
+          <div className="flex flex-wrap gap-6">
+            {cards.map((card) => (
+              <div key={card.id} className="group relative">
+                <CardFace
+                  format={format}
+                  layout={layout}
+                  width={250}
+                  frameUrl={frames.front}
+                  image={card.image}
+                  values={card.values}
+                  onChange={(key, value) => updateCard(card.id, key, value)}
+                  onPickImage={() => {
+                    replaceCardId.current = card.id
+                    replaceRef.current?.click()
+                  }}
+                />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Karte löschen"
+                  className="absolute -top-2 -right-2 size-7 rounded-full border bg-background opacity-0 shadow-sm transition-opacity group-hover:opacity-100"
+                  onClick={() => setCards((prev) => prev.filter((c) => c.id !== card.id))}
+                >
+                  <Trash2 className="size-3.5" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
     </main>
   )
 }
