@@ -93,10 +93,25 @@
   <p>The reference prompt combines:</p>
   <ul>
     <li>the selected format (name and physical dimensions, portrait, full bleed),</li>
-    <li>the selected layout's reserved regions, which must stay visually quiet so content placed on top remains readable,</li>
+    <li>the crop window: the generated 1024 × 1536 canvas is center-cropped to the format's aspect ratio, and the prompt states exactly which part of the image will be printed,</li>
+    <li>the selected layout's reserved content zones with concrete image coordinates (percent ranges of width and height, mapped through the crop window), which must stay visually quiet so content placed on top remains readable,</li>
     <li>hard constraints: no text, no letters, no logos, no sample content, no characters,</li>
     <li>the user's style prompt.</li>
   </ul>
+  <p>
+    Layout geometry is the single source of truth: each layout defines its regions as
+    percent rectangles of the card face, and the same rectangles drive both the prompt's
+    content zones and the positioning of the editable fields in <code>CardFace</code> — so
+    text and images entered later land exactly where the design keeps room for them.
+  </p>
+  <p>
+    After generation, a <strong>card theme</strong> is derived so the filled-in cards look
+    cast from one mold: the average color of the frame's content zones is sampled on a
+    canvas to produce a matching field background and a high-contrast ink color (dark ink on
+    light zones, light ink on dark ones), and a language model picks the best-fitting
+    typeface for the style prompt from a curated Google Fonts list. The theme is re-derived
+    after every refinement.
+  </p>
   <p>
     A checkbox additionally requests a <strong>card back</strong>: a single symmetric
     ornamental composition covering the whole card, generated from the same style prompt.

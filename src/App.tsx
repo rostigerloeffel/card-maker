@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { FORMATS } from '@/lib/formats'
 import { LAYOUTS } from '@/lib/layouts'
 import { generateFrame, loadApiKey, refineFrame, saveApiKey } from '@/lib/openai'
+import { deriveTheme, type CardTheme } from '@/lib/theme'
 import { cn } from '@/lib/utils'
 
 interface CardEntry {
@@ -46,6 +47,7 @@ function App() {
   const [stylePrompt, setStylePrompt] = useState('')
   const [withBack, setWithBack] = useState(false)
   const [frames, setFrames] = useState<{ front?: string; back?: string }>({})
+  const [theme, setTheme] = useState<CardTheme | null>(null)
   const [generating, setGenerating] = useState(false)
   const [refinePrompt, setRefinePrompt] = useState('')
   const [refining, setRefining] = useState(false)
@@ -68,6 +70,20 @@ function App() {
     saveApiKey(value.trim())
   }
 
+  // Leitet Schrift und Farben aus dem neuen Rahmendesign ab; scheitert die
+  // Ableitung, bleiben die Karten beim neutralen Standard-Erscheinungsbild.
+  async function updateTheme(front: string | undefined, style: string) {
+    if (!front) {
+      setTheme(null)
+      return
+    }
+    try {
+      setTheme(await deriveTheme(apiKey, style, front, format, layout))
+    } catch {
+      setTheme(null)
+    }
+  }
+
   async function handleGenerate() {
     setGenerating(true)
     setError(null)
@@ -81,6 +97,7 @@ function App() {
       setFrames({ front, back })
       setHistory([stylePrompt.trim()])
       setRefinePrompt('')
+      await updateTheme(front, stylePrompt)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -95,12 +112,17 @@ function App() {
     setError(null)
     try {
       const [front, back] = await Promise.all([
-        frames.front ? refineFrame(apiKey, frames.front, instruction, 'front') : Promise.resolve(undefined),
-        frames.back ? refineFrame(apiKey, frames.back, instruction, 'back') : Promise.resolve(undefined),
+        frames.front
+          ? refineFrame(apiKey, format, layout, frames.front, instruction, 'front')
+          : Promise.resolve(undefined),
+        frames.back
+          ? refineFrame(apiKey, format, layout, frames.back, instruction, 'back')
+          : Promise.resolve(undefined),
       ])
       setFrames({ front: front ?? frames.front, back: back ?? frames.back })
       setHistory((prev) => [...prev, instruction])
       setRefinePrompt('')
+      await updateTheme(front ?? frames.front, history[0] ?? stylePrompt)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -375,6 +397,7 @@ function App() {
                   frameUrl={frames.front}
                   image={card.image}
                   values={card.values}
+                  theme={frames.front ? theme : null}
                   onChange={(key, value) => updateCard(card.id, key, value)}
                   onPickImage={() => {
                     replaceCardId.current = card.id
