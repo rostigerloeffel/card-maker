@@ -1,6 +1,7 @@
 import type { CardFormat } from './formats'
 import { cropWindow, IMAGE_SIZE, layoutZones } from './geometry'
 import type { CardLayout } from './layouts'
+import { renderLayoutTemplate } from './template'
 
 const envApiKey = import.meta.env.VITE_OPENAI_API_KEY ?? ''
 
@@ -79,15 +80,22 @@ export function buildFramePrompt(
     )
   }
 
+  // Die Vorderseite wird über den images/edits-Endpoint aus der
+  // Layout-Schablone erzeugt — der Prompt erklärt deren Elemente.
   return (
-    `${base} This is the card front: an ornamental border along the edges ` +
-    `framing the card's content zones. ${describeCrop(format)}` +
-    `The card layout reserves these content zones: ${describeZones(format, layout)}. ` +
-    `Render every content zone as a calm, even, low-contrast surface without ` +
-    `ornament, so that text and pictures placed there later remain readable ` +
-    `and blend into the design. You may give a zone a subtle panel or inset ` +
-    `look, but keep its interior quiet. Concentrate all decorative detail in ` +
-    `the space between and around these zones. Style: ${stylePrompt}`
+    `${base} This is the card front. The attached image is a schematic ` +
+    `template of the card layout: the white area is the card face, the ` +
+    `slightly darker margin is trimmed away in print, and the gray rounded ` +
+    `rectangles are reserved content zones for text and artwork. ` +
+    `Repaint the entire canvas as an ornamental frame design in this style: ` +
+    `${stylePrompt}. Nothing of the plain schematic may remain visible. ` +
+    `Keep every content zone exactly at its position and size, rendered as a ` +
+    `calm, even, low-contrast surface without ornament — like an empty panel ` +
+    `or window matching the style — so text and pictures placed there later ` +
+    `stay readable and blend into the design. Concentrate all decorative ` +
+    `detail in the space between and around the zones. ` +
+    `For reference, the zones are: ${describeZones(format, layout)}. ` +
+    `${describeCrop(format)}`
   )
 }
 
@@ -138,6 +146,11 @@ function requireKey(apiKey: string): string {
   return key
 }
 
+// Vorderseiten entstehen über images/edits aus der Layout-Schablone: das
+// Bildmodell hält die Struktur eines Basisbilds deutlich zuverlässiger ein
+// als Koordinatenangaben im Text, sodass die Inhaltszonen exakt dort landen,
+// wo Editor und PDF-Export die Inhalte platzieren. Rückseiten haben keine
+// Zonen und werden weiterhin frei generiert.
 export async function generateFrame(
   apiKey: string,
   format: CardFormat,
@@ -145,20 +158,39 @@ export async function generateFrame(
   stylePrompt: string,
   side: CardSide,
 ): Promise<string> {
-  const res = await fetch('https://api.openai.com/v1/images/generations', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${requireKey(apiKey)}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'gpt-image-1',
-      prompt: buildFramePrompt(format, layout, stylePrompt, side),
-      size: IMAGE_SIZE,
-      quality: 'medium',
-    }),
-  })
+  const key = requireKey(apiKey)
+  const prompt = buildFramePrompt(format, layout, stylePrompt, side)
 
+  if (side === 'back') {
+    const res = await fetch('https://api.openai.com/v1/images/generations', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${key}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-image-1',
+        prompt,
+        size: IMAGE_SIZE,
+        quality: 'medium',
+      }),
+    })
+    return parseImageResponse(res)
+  }
+
+  const template = await renderLayoutTemplate(format, layout)
+  const form = new FormData()
+  form.append('model', 'gpt-image-1')
+  form.append('image', template, 'layout-template.png')
+  form.append('prompt', prompt)
+  form.append('size', IMAGE_SIZE)
+  form.append('quality', 'medium')
+
+  const res = await fetch('https://api.openai.com/v1/images/edits', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${key}` },
+    body: form,
+  })
   return parseImageResponse(res)
 }
 

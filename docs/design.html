@@ -105,6 +105,15 @@
     text and images entered later land exactly where the design keeps room for them.
   </p>
   <p>
+    Because image models follow the structure of an input image far more reliably than
+    numeric coordinates in text, the card front is generated via the
+    <code>images/edits</code> endpoint from a rendered <strong>layout template</strong>: a
+    schematic PNG (white card face, darkened trim margin, gray rounded rectangles at the
+    exact zone positions) drawn from the same region geometry. The prompt instructs the
+    model to repaint the canvas in the requested style while keeping every zone in place as
+    a calm, ornament-free surface. The card back has no zones and is generated freely.
+  </p>
+  <p>
     After generation, a <strong>card theme</strong> is derived so the filled-in cards look
     cast from one mold: the average color of the frame's content zones is sampled on a
     canvas to produce a matching field background and a high-contrast ink color (dark ink on
