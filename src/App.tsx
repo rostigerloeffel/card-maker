@@ -1,14 +1,15 @@
 import { useRef, useState } from 'react'
-import { ImagePlus, Loader2, Plus, Sparkles, Trash2 } from 'lucide-react'
+import { ImagePlus, Loader2, Plus, Send, Sparkles, Trash2 } from 'lucide-react'
 
 import { CardFace, type CardValues } from '@/components/CardFace'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Textarea } from '@/components/ui/textarea'
 import { FORMATS } from '@/lib/formats'
 import { LAYOUTS } from '@/lib/layouts'
-import { generateFrame, hasApiKey } from '@/lib/openai'
+import { generateFrame, loadApiKey, refineFrame, saveApiKey } from '@/lib/openai'
 import { cn } from '@/lib/utils'
 
 interface CardEntry {
@@ -41,10 +42,14 @@ function readAsDataUrl(file: File): Promise<string> {
 function App() {
   const [formatId, setFormatId] = useState('poker')
   const [layoutId, setLayoutId] = useState('tcg')
+  const [apiKey, setApiKey] = useState(loadApiKey)
   const [stylePrompt, setStylePrompt] = useState('')
   const [withBack, setWithBack] = useState(false)
   const [frames, setFrames] = useState<{ front?: string; back?: string }>({})
   const [generating, setGenerating] = useState(false)
+  const [refinePrompt, setRefinePrompt] = useState('')
+  const [refining, setRefining] = useState(false)
+  const [history, setHistory] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
   const [cards, setCards] = useState<CardEntry[]>([])
 
@@ -55,19 +60,51 @@ function App() {
   const format = FORMATS.find((f) => f.id === formatId) ?? FORMATS[0]
   const layout = LAYOUTS.find((l) => l.id === layoutId) ?? LAYOUTS[0]
 
+  const hasApiKey = apiKey.trim().length > 0
+  const busy = generating || refining
+
+  function handleApiKeyChange(value: string) {
+    setApiKey(value)
+    saveApiKey(value.trim())
+  }
+
   async function handleGenerate() {
     setGenerating(true)
     setError(null)
     try {
       const [front, back] = await Promise.all([
-        generateFrame(format, layout, stylePrompt, 'front'),
-        withBack ? generateFrame(format, layout, stylePrompt, 'back') : Promise.resolve(undefined),
+        generateFrame(apiKey, format, layout, stylePrompt, 'front'),
+        withBack
+          ? generateFrame(apiKey, format, layout, stylePrompt, 'back')
+          : Promise.resolve(undefined),
       ])
       setFrames({ front, back })
+      setHistory([stylePrompt.trim()])
+      setRefinePrompt('')
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setGenerating(false)
+    }
+  }
+
+  async function handleRefine() {
+    const instruction = refinePrompt.trim()
+    if (!instruction) return
+    setRefining(true)
+    setError(null)
+    try {
+      const [front, back] = await Promise.all([
+        frames.front ? refineFrame(apiKey, frames.front, instruction, 'front') : Promise.resolve(undefined),
+        frames.back ? refineFrame(apiKey, frames.back, instruction, 'back') : Promise.resolve(undefined),
+      ])
+      setFrames({ front: front ?? frames.front, back: back ?? frames.back })
+      setHistory((prev) => [...prev, instruction])
+      setRefinePrompt('')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setRefining(false)
     }
   }
 
@@ -167,6 +204,20 @@ function App() {
           hint="Beschreibe den gewünschten Stil — daraus entsteht ein Rahmendesign für alle Karten."
         />
         <div className="flex max-w-xl flex-col gap-3">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="openai-token">OpenAI API-Token</Label>
+            <Input
+              id="openai-token"
+              type="password"
+              autoComplete="off"
+              placeholder="sk-..."
+              value={apiKey}
+              onChange={(e) => handleApiKeyChange(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Wird nur lokal in deinem Browser gespeichert und direkt an OpenAI gesendet.
+            </p>
+          </div>
           <Textarea
             rows={3}
             placeholder="z. B. dunkles Fantasy-Design mit goldenen Ornamenten und feiner Linienführung"
@@ -185,15 +236,15 @@ function App() {
           <div className="flex items-center gap-3">
             <Button
               onClick={handleGenerate}
-              disabled={generating || !stylePrompt.trim() || !hasApiKey}
+              disabled={busy || !stylePrompt.trim() || !hasApiKey}
               className="self-start"
             >
               {generating && <Loader2 className="animate-spin" />}
-              Design generieren
+              {frames.front ? 'Neu generieren' : 'Design generieren'}
             </Button>
             {!hasApiKey && (
               <span className="text-sm text-muted-foreground">
-                Kein API-Token konfiguriert (VITE_OPENAI_API_KEY).
+                Bitte zuerst ein OpenAI API-Token eingeben.
               </span>
             )}
           </div>
@@ -223,6 +274,53 @@ function App() {
                 <figcaption className="text-xs text-muted-foreground">Rückseite</figcaption>
               </figure>
             )}
+          </div>
+        )}
+        {(frames.front || frames.back) && (
+          <div className="flex max-w-xl flex-col gap-3">
+            <div className="flex flex-col gap-1">
+              <h3 className="text-sm font-medium">Design iterativ verbessern</h3>
+              <p className="text-sm text-muted-foreground">
+                Beschreibe, was am aktuellen Design geändert werden soll — es wird
+                darauf aufbauend überarbeitet.
+              </p>
+            </div>
+            {history.length > 0 && (
+              <ul className="flex flex-col gap-1.5">
+                {history.map((message, i) => (
+                  <li
+                    key={i}
+                    className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground"
+                  >
+                    <span className="mr-2 font-medium text-foreground">
+                      {i === 0 ? 'Stil' : `Änderung ${i}`}
+                    </span>
+                    {message}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="flex items-end gap-3">
+              <Textarea
+                rows={2}
+                placeholder="z. B. die Ornamente feiner machen und in Silber statt Gold"
+                value={refinePrompt}
+                onChange={(e) => setRefinePrompt(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                    e.preventDefault()
+                    void handleRefine()
+                  }
+                }}
+              />
+              <Button
+                onClick={handleRefine}
+                disabled={busy || !refinePrompt.trim() || !hasApiKey}
+              >
+                {refining ? <Loader2 className="animate-spin" /> : <Send />}
+                Senden
+              </Button>
+            </div>
           </div>
         )}
       </section>
